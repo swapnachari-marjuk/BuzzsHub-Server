@@ -28,8 +28,31 @@ async function run() {
     // users related apis
     app.post("/users", async (req, res) => {
       const userDoc = req.body;
+      const query = { email: userDoc.email };
+      const existingUser = await usersColl.findOne(query);
+      if (existingUser) {
+        return res.send({ message: "User exists in database." });
+      }
       const result = await usersColl.insertOne(userDoc);
       res.send(result);
+    });
+
+    app.get("/users", async (req, res) => {
+      const { email } = req.query;
+      const query = {};
+      if (email) {
+        query.email = email;
+      }
+      const user = await usersColl.find(query).toArray();
+      res.send(user);
+    });
+
+    app.get("/users/:email/role", async (req, res) => {
+      const { email } = req.params;
+      const user = await usersColl.findOne({ email });
+      const userRole = user.role || user;
+      console.log(userRole);
+      res.send({ role: userRole });
     });
 
     // Send a ping to confirm a successful connection
