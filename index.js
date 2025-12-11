@@ -24,6 +24,7 @@ async function run() {
     await client.connect();
     const bHubDB = client.db("buzzs_hub_db");
     const usersColl = bHubDB.collection("users");
+    const clubsColl = bHubDB.collection("clubs");
 
     // users related apis
     app.post("/users", async (req, res) => {
@@ -37,6 +38,15 @@ async function run() {
       res.send(result);
     });
 
+    app.patch("/users", async (req, res) => {
+      const { role, email } = req.body;
+      const query = { email };
+      const update = { role };
+      const result = await usersColl.updateOne(query, { $set: update });
+      res.send(result);
+    });
+
+    // getting a specific user. if it's not usable, it will deleted later
     app.get("/users", async (req, res) => {
       const { email } = req.query;
       const query = {};
@@ -50,9 +60,22 @@ async function run() {
     app.get("/users/:email/role", async (req, res) => {
       const { email } = req.params;
       const user = await usersColl.findOne({ email });
-      const userRole = user.role || user;
-      console.log(userRole);
+      const userRole = user?.role;
       res.send({ role: userRole });
+    });
+
+    // clubs related apis
+    app.post("/clubs", async (req, res) => {
+      const clubData = req.body;
+      console.log(clubData);
+      clubData.createdAt = new Date();
+      const result = await clubsColl.insertOne(clubData);
+      res.send(result);
+    });
+
+    app.get("/clubs", async (req, res) => {
+      const result = await clubsColl.find().toArray();
+      res.send(result);
     });
 
     // Send a ping to confirm a successful connection
