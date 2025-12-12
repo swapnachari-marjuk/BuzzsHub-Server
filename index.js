@@ -1,6 +1,6 @@
 const express = require("express");
 const cors = require("cors");
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 require("dotenv").config();
 const app = express();
 const port = process.env.PORT || 3000;
@@ -75,6 +75,21 @@ async function run() {
 
     app.get("/clubs", async (req, res) => {
       const result = await clubsColl.find().toArray();
+      res.send(result);
+    });
+
+    app.patch("/clubs/:id", async (req, res) => {
+      const { status } = req.body;
+      const { id } = req.params;
+      const query = { _id: new ObjectId(id) };
+      const result = await clubsColl.updateOne(query, { $set: { status } });
+      res.send(result);
+    });
+
+    app.delete("/clubs/:id", async (req, res) => {
+      const { id } = req.params;
+      const query = { _id: new ObjectId(id) };
+      const result = await clubsColl.deleteOne(query);
       res.send(result);
     });
 
