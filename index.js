@@ -74,15 +74,32 @@ async function run() {
     });
 
     app.get("/clubs", async (req, res) => {
-      const result = await clubsColl.find().toArray();
+      const { status, email } = req.query;
+      console.log(email);
+      const query = {};
+      if (email) {
+        query.managerEmail = email;
+      }
+      if (status) {
+        query.status = status;
+      }
+      const result = await clubsColl.find(query).toArray();
+      res.send(result);
+    });
+
+    app.get("/clubs/:id", async (req, res) => {
+      const { id } = req.params;
+      const query = { _id: new ObjectId(id) };
+      const result = await clubsColl.findOne(query);
+      console.log(result);
       res.send(result);
     });
 
     app.patch("/clubs/:id", async (req, res) => {
-      const { status } = req.body;
+      const update = req.body;
       const { id } = req.params;
       const query = { _id: new ObjectId(id) };
-      const result = await clubsColl.updateOne(query, { $set: { status } });
+      const result = await clubsColl.updateOne(query, { $set: update });
       res.send(result);
     });
 
