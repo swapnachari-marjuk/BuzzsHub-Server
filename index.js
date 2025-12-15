@@ -25,6 +25,7 @@ async function run() {
     const bHubDB = client.db("buzzs_hub_db");
     const usersColl = bHubDB.collection("users");
     const clubsColl = bHubDB.collection("clubs");
+    const eventsColl = bHubDB.collection("events");
 
     // users related apis
     app.post("/users", async (req, res) => {
@@ -107,6 +108,42 @@ async function run() {
       const { id } = req.params;
       const query = { _id: new ObjectId(id) };
       const result = await clubsColl.deleteOne(query);
+      res.send(result);
+    });
+
+    // events related apis
+    app.post("/events/:clubID", async (req, res) => {
+      const { clubID } = req.params;
+      const event = req.body;
+      event.clubID = clubID;
+      const result = await eventsColl.insertOne(event);
+
+      const countIncRes = await clubsColl.updateOne(
+        {
+          _id: new ObjectId(clubID),
+        },
+        {
+          $inc: { eventCount: 1 },
+        }
+      );
+      res.send({ success: true, result, countIncRes });
+    });
+
+    app.get("/events", async (req, res) => {
+      const { email } = req.query;
+      const query = {};
+      if (email) {
+        query.managerEmail = email;
+      }
+      const result = await eventsColl.find(query).toArray();
+      res.send(result);
+    });
+
+    app.get("/events/:eventID", async (req, res) => {
+      const { eventID } = req.params;
+     
+      const query = { _id: new ObjectId(eventID)};
+      const result = await eventsColl.findOne(query);
       res.send(result);
     });
 
