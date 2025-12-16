@@ -141,9 +141,24 @@ async function run() {
 
     app.get("/events/:eventID", async (req, res) => {
       const { eventID } = req.params;
-     
-      const query = { _id: new ObjectId(eventID)};
+
+      const query = { _id: new ObjectId(eventID) };
       const result = await eventsColl.findOne(query);
+      res.send(result);
+    });
+
+    app.patch("/events/:eventId", async (req, res) => {
+      const { eventId } = req.params;
+      const query = { _id: new ObjectId(eventId) };
+      const update = { $set: req.body };
+      const result = await eventsColl.updateOne(query, update);
+      res.send(result);
+    });
+
+    app.delete("/events/:eventId", async (req, res) => {
+      const { eventId } = req.params;
+      const query = { _id: new ObjectId(eventId) };
+      const result = await eventsColl.deleteOne(query);
       res.send(result);
     });
 
