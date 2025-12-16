@@ -7,6 +7,8 @@ const port = process.env.PORT || 3000;
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.2ic5wod.mongodb.net/?appName=Cluster0`;
 
+const stripe = require("stripe")(process.env.STRIPE_KEY);
+
 const client = new MongoClient(uri, {
   serverApi: {
     version: ServerApiVersion.v1,
@@ -26,6 +28,7 @@ async function run() {
     const usersColl = bHubDB.collection("users");
     const clubsColl = bHubDB.collection("clubs");
     const eventsColl = bHubDB.collection("events");
+    const clubMembersColl = bHubDB.collection("clubMembers");
 
     // users related apis
     app.post("/users", async (req, res) => {
@@ -92,7 +95,6 @@ async function run() {
       const { id } = req.params;
       const query = { _id: new ObjectId(id) };
       const result = await clubsColl.findOne(query);
-      console.log(result);
       res.send(result);
     });
 
@@ -162,6 +164,48 @@ async function run() {
       res.send(result);
     });
 
+    app.post("/clubMembers", async (req, res) => {
+      const doc = req.body;
+      const userEmail = doc.userEmail;
+      const clubId = doc.clubId;
+      const joinedUser = await clubMembersColl.findOne({
+        userEmail,
+        clubId,
+      });
+
+      if (joinedUser) {
+        return res.send({ message: "User already joined to this Club." });
+      }
+
+      const result = await clubMembersColl.insertOne(doc);
+      res.send(result);
+    });
+
+    app.post("/create-checkout-session", async (req, res) => {
+      const paymentInfo = req.body;
+      const cost = parseInt(paymentInfo.fee) * 100;
+      const session = await stripe.checkout.sessions.create({
+        line_items: [
+          {
+            price_data: {
+              currency: "USD",
+              product_data: {
+                name: paymentInfo.clubName,
+              },
+              unit_amount: cost,
+            },
+            quantity: 1,
+          },
+        ],
+        customer_email: paymentInfo.participantEmail,
+        mode: "payment",
+        metadata: {
+          clubId: paymentInfo.clubId,
+        },
+        success_url: `${process.env.SITE_DOMAIN}/success-club-payment?session_id={CHECKOUT_SESSION_ID}`,
+      });
+      res.send({ url: session.url });
+    });
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
