@@ -29,6 +29,7 @@ async function run() {
     const clubsColl = bHubDB.collection("clubs");
     const eventsColl = bHubDB.collection("events");
     const clubMembersColl = bHubDB.collection("clubMembers");
+    const eventRegistersColl = bHubDB.collection("eventRegister");
 
     // users related apis
     app.post("/users", async (req, res) => {
@@ -178,10 +179,10 @@ async function run() {
     app.post("/clubMembers", async (req, res) => {
       const doc = req.body;
       doc.joinedAt = new Date();
-      const userEmail = doc.userEmail;
+      const participantEmail = doc.participantEmail;
       const clubId = doc.clubId;
       const joinedUser = await clubMembersColl.findOne({
-        userEmail,
+        participantEmail,
         clubId,
       });
 
@@ -194,16 +195,51 @@ async function run() {
     });
 
     app.get("/clubMembers", async (req, res) => {
-      const { clubId, userEmail } = req.query;
+      const { clubId, participantEmail } = req.query;
       const query = {};
 
       if (clubId) {
         query.clubId = clubId;
       }
-      if (userEmail) {
-        query.userEmail = userEmail;
+      if (participantEmail) {
+        query.participantEmail = participantEmail;
       }
       const result = await clubMembersColl.findOne(query);
+      res.send(result);
+    });
+
+    // event registration related apis
+    app.post("/eventRegistration", async (req, res) => {
+      const doc = req.body;
+      doc.joinedAt = new Date();
+      const participantEmail = doc.participantEmail;
+      const clubId = doc.clubId;
+      const joinedUser = await eventRegistersColl.findOne({
+        participantEmail,
+        clubId,
+      });
+
+      if (joinedUser) {
+        return res.send({ message: "User already joined to this Club." });
+      }
+
+      const result = await eventRegistersColl.insertOne(doc);
+      res.send(result);
+    });
+
+    app.get("/eventRegistration", async (req, res) => {
+      const { eventId, participantEmail } = req.query;
+      const query = {};
+
+      if (eventId) {
+        query.eventId = eventId;
+      }
+
+      if (participantEmail) {
+        query.participantEmail = participantEmail;
+      }
+
+      const result = await eventRegistersColl.findOne(query);
       res.send(result);
     });
 
@@ -217,7 +253,7 @@ async function run() {
             price_data: {
               currency: "USD",
               product_data: {
-                name: paymentInfo.clubName,
+                name: paymentInfo.clubName || paymentInfo.eventName,
               },
               unit_amount: cost,
             },
@@ -228,8 +264,11 @@ async function run() {
         mode: "payment",
         metadata: {
           clubId: paymentInfo.clubId,
-          clubName: paymentInfo.clubName,
-          userEmail: paymentInfo.participantEmail,
+          eventId: paymentInfo.eventId || null,
+          clubName: paymentInfo.clubName || null,
+          eventName: paymentInfo.eventName || null,
+          participantEmail: paymentInfo.participantEmail,
+          paymentType: paymentInfo.paymentType,
         },
         success_url: `${process.env.SITE_DOMAIN}/success-club-payment?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${process.env.SITE_DOMAIN}/canceled-club-payment?session_id={CHECKOUT_SESSION_ID}`,
@@ -240,28 +279,57 @@ async function run() {
     app.post("/verify-payment-session", async (req, res) => {
       const { sessionId } = req.query;
       const session = await stripe.checkout.sessions.retrieve(sessionId);
+      console.log(session);
       if (session.payment_status === "paid") {
-        const memberShipInfo = {
-          clubName: session.metadata.clubName,
-          clubId: session.metadata.clubId,
-          userEmail: session.metadata.userEmail,
-          status: "active",
-          paymentId: session.payment_intent,
-          joinedAt: new Date(),
-        };
+        if (session.metadata.paymentType === "clubMembership") {
+          const memberShipInfo = {
+            clubName: session.metadata.clubName,
+            clubId: session.metadata.clubId,
+            participantEmail: session.metadata.participantEmail,
+            status: "active",
+            paymentId: session.payment_intent,
+            joinedAt: new Date(),
+          };
 
-        const existingMember = await clubMembersColl.findOne({
-          clubId: memberShipInfo.clubId,
-          userEmail: memberShipInfo.userEmail,
-        });
+          const existingMember = await clubMembersColl.findOne({
+            clubId: memberShipInfo.clubId,
+            participantEmail: memberShipInfo.participantEmail,
+          });
 
-        if (existingMember) {
-          return res.send({ message: "User already existing!" });
+          if (existingMember) {
+            return res.send({ message: "User already existing!" });
+          }
+
+          const result = await clubMembersColl.insertOne(memberShipInfo);
+
+          return res.send({ result, paymentId: memberShipInfo.paymentId });
         }
 
-        const result = await clubMembersColl.insertOne(memberShipInfo);
+        if (session.metadata.paymentType === "eventRegistration") {
 
-        res.send(result);
+          const registrationInfo = {
+            eventId: session.metadata.eventId,
+            clubId: session.metadata.clubId,
+            eventName: session.metadata.eventName,
+            participantEmail: session.metadata.participantEmail,
+            status: "active",
+            paymentId: session.payment_intent,
+            joinedAt: new Date(),
+          };
+
+          const existingMember = await eventRegistersColl.findOne({
+            eventId: registrationInfo.eventId,
+            participantEmail: registrationInfo.participantEmail,
+          });
+
+          if (existingMember) {
+            return res.send({ message: "User already existing!" });
+          }
+
+          const result = await eventRegistersColl.insertOne(registrationInfo);
+
+          return res.send({ result, paymentId: registrationInfo.paymentId });
+        }
       }
       res.send({ message: "Maybe Payment was not succeed" });
     });
