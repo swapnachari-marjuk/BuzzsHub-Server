@@ -78,7 +78,7 @@ async function run() {
     });
 
     app.get("/clubs", async (req, res) => {
-      const { status, email } = req.query;
+      const { status, email, limit } = req.query;
       console.log(email);
       const query = {};
       if (email) {
@@ -86,6 +86,16 @@ async function run() {
       }
       if (status) {
         query.status = status;
+      }
+      if (limit) {
+        const limitedResult = await clubsColl
+          .find(query)
+          .sort({ createdAt: -1 })
+          .toArray();
+        return res.send({
+          message: "data fetched successfully.",
+          limitedResult,
+        });
       }
       const result = await clubsColl.find(query).toArray();
       res.send(result);
@@ -164,8 +174,10 @@ async function run() {
       res.send(result);
     });
 
+    // club members related apis
     app.post("/clubMembers", async (req, res) => {
       const doc = req.body;
+      doc.joinedAt = new Date();
       const userEmail = doc.userEmail;
       const clubId = doc.clubId;
       const joinedUser = await clubMembersColl.findOne({
@@ -181,6 +193,21 @@ async function run() {
       res.send(result);
     });
 
+    app.get("/clubMembers", async (req, res) => {
+      const { clubId, userEmail } = req.query;
+      const query = {};
+
+      if (clubId) {
+        query.clubId = clubId;
+      }
+      if (userEmail) {
+        query.userEmail = userEmail;
+      }
+      const result = await clubMembersColl.findOne(query);
+      res.send(result);
+    });
+
+    // payments related apis
     app.post("/create-checkout-session", async (req, res) => {
       const paymentInfo = req.body;
       const cost = parseInt(paymentInfo.fee) * 100;
@@ -201,10 +228,42 @@ async function run() {
         mode: "payment",
         metadata: {
           clubId: paymentInfo.clubId,
+          clubName: paymentInfo.clubName,
+          userEmail: paymentInfo.participantEmail,
         },
         success_url: `${process.env.SITE_DOMAIN}/success-club-payment?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${process.env.SITE_DOMAIN}/canceled-club-payment?session_id={CHECKOUT_SESSION_ID}`,
       });
       res.send({ url: session.url });
+    });
+
+    app.post("/verify-payment-session", async (req, res) => {
+      const { sessionId } = req.query;
+      const session = await stripe.checkout.sessions.retrieve(sessionId);
+      if (session.payment_status === "paid") {
+        const memberShipInfo = {
+          clubName: session.metadata.clubName,
+          clubId: session.metadata.clubId,
+          userEmail: session.metadata.userEmail,
+          status: "active",
+          paymentId: session.payment_intent,
+          joinedAt: new Date(),
+        };
+
+        const existingMember = await clubMembersColl.findOne({
+          clubId: memberShipInfo.clubId,
+          userEmail: memberShipInfo.userEmail,
+        });
+
+        if (existingMember) {
+          return res.send({ message: "User already existing!" });
+        }
+
+        const result = await clubMembersColl.insertOne(memberShipInfo);
+
+        res.send(result);
+      }
+      res.send({ message: "Maybe Payment was not succeed" });
     });
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
