@@ -117,10 +117,12 @@ async function run() {
       res.send(result);
     });
 
-    app.delete("/clubs/:id", async (req, res) => {
+    app.patch("/clubs/:id", async (req, res) => {
+      const update = req.body;
+      console.log(update);
       const { id } = req.params;
       const query = { _id: new ObjectId(id) };
-      const result = await clubsColl.deleteOne(query);
+      const result = await clubsColl.updateOne(query, { $set: update });
       res.send(result);
     });
 
@@ -131,14 +133,16 @@ async function run() {
       event.clubID = clubID;
       const result = await eventsColl.insertOne(event);
 
-      const countIncRes = await clubsColl.updateOne(
-        {
-          _id: new ObjectId(clubID),
-        },
-        {
-          $inc: { eventCount: 1 },
-        }
-      );
+      if (result.insertedId) {
+        const countIncRes = await clubsColl.updateOne(
+          {
+            _id: new ObjectId(clubID),
+          },
+          {
+            $inc: { eventCount: 1 },
+          }
+        );
+      }
       res.send({ success: true, result, countIncRes });
     });
 
@@ -191,6 +195,12 @@ async function run() {
       }
 
       const result = await clubMembersColl.insertOne(doc);
+      if (result.insertedId) {
+        await clubsColl.updateOne(
+          { _id: new ObjectId(clubId) },
+          { $inc: { memberCount: 1 } }
+        );
+      }
       res.send(result);
     });
 
@@ -302,11 +312,17 @@ async function run() {
 
           const result = await clubMembersColl.insertOne(memberShipInfo);
 
+          if (result.insertedId) {
+            await clubsColl.updateOne(
+              { _id: new ObjectId(memberShipInfo.clubId) },
+              { $inc: { memberCount: 1 } }
+            );
+          }
+
           return res.send({ result, paymentId: memberShipInfo.paymentId });
         }
 
         if (session.metadata.paymentType === "eventRegistration") {
-
           const registrationInfo = {
             eventId: session.metadata.eventId,
             clubId: session.metadata.clubId,
@@ -333,6 +349,59 @@ async function run() {
       }
       res.send({ message: "Maybe Payment was not succeed" });
     });
+
+    //admin overview apis
+    app.get("/adminOverview", async (req, res) => {
+      const eventsCountPromise = eventsColl.countDocuments();
+      const usersCountPromise = usersColl.countDocuments();
+      const membersCountPromise = clubMembersColl.countDocuments();
+      const clubsByStatusPromise = clubsColl
+        .aggregate([{ $group: { _id: "$status", count: { $sum: 1 } } }])
+        .toArray();
+
+      const [eventsCount, usersCount, membersCount, clubsByStatus] =
+        await Promise.all([
+          eventsCountPromise,
+          usersCountPromise,
+          membersCountPromise,
+          clubsByStatusPromise,
+        ]);
+
+      const result = {
+        eventsCount,
+        usersCount,
+        membersCount,
+        clubsByStatus,
+      };
+
+      res.send(result);
+    });
+
+    // manager overview apis
+    app.get("/managerOverview", async (req, res) => {
+      const { managerEmail, clubId } = req.query;
+      const query = {};
+      if (managerEmail) {
+        query.managerEmail = managerEmail;
+      }
+
+      console.log(query);
+      const managersClubsPromise = clubsColl.countDocuments(query);
+      const managersEventsPromise = eventsColl.countDocuments(query);
+
+      const [managersClubs, managersEvents] = await Promise.all([
+        managersClubsPromise,
+        managersEventsPromise,
+      ]);
+
+      const result = {
+        managersClubs,
+        managersEvents,
+      };
+
+      res.send(result);
+    });
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
