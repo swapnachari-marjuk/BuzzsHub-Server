@@ -162,7 +162,7 @@ async function run() {
         query.managerEmail = email;
       }
 
-      if (purpose) {
+      if (purpose === "managerOverview") {
         const minimizedRes = await eventsColl
           .find(query)
           .project({ title: 1 })
@@ -223,7 +223,7 @@ async function run() {
     });
 
     app.get("/clubMembers", async (req, res) => {
-      const { clubId, participantEmail } = req.query;
+      const { clubId, participantEmail, status } = req.query;
       const query = {};
 
       if (clubId) {
@@ -231,6 +231,11 @@ async function run() {
       }
       if (participantEmail) {
         query.participantEmail = participantEmail;
+      }
+
+      if (status) {
+        query.status = status;
+      } else {
       }
       const result = await clubMembersColl.find(query).toArray();
       res.send(result);
@@ -275,7 +280,7 @@ async function run() {
         query.participantEmail = participantEmail;
       }
 
-      const result = await eventRegistersColl.findOne(query);
+      const result = await eventRegistersColl.find(query).toArray();
       res.send(result);
     });
 
@@ -308,8 +313,8 @@ async function run() {
           paymentType: paymentInfo.paymentType,
           eventManager: paymentInfo.eventManager,
         },
-        success_url: `${process.env.SITE_DOMAIN}/success-club-payment?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${process.env.SITE_DOMAIN}/canceled-club-payment?session_id={CHECKOUT_SESSION_ID}`,
+        success_url: `${process.env.FRONTEND_DOMAIN}/success-club-payment?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${process.env.FRONTEND_DOMAIN}/canceled-club-payment?session_id={CHECKOUT_SESSION_ID}`,
       });
       res.send({ url: session.url });
     });
@@ -430,8 +435,32 @@ async function run() {
       res.send(result);
     });
 
+    // user overview api
+    app.get("/memberOverview", async (req, res) => {
+      const { memberEmail } = req.query;
+      const query = {};
+      if (memberEmail) {
+        query.participantEmail = memberEmail;
+      }
+
+      const membersClubPromise = clubMembersColl.countDocuments(query);
+      const membersEventsPromise = eventRegistersColl.countDocuments(query);
+
+      const [membersClub, membersEvents] = await Promise.all([
+        membersClubPromise,
+        membersEventsPromise,
+      ]);
+
+      const result = {
+        membersClub,
+        membersEvents,
+      };
+
+      res.send(result);
+    });
+
     // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
+    // await client.db("admin").command({ ping: 1 });
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"
     );
