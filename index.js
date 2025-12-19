@@ -79,7 +79,7 @@ async function run() {
     });
 
     app.get("/clubs", async (req, res) => {
-      const { status, email, limit } = req.query;
+      const { status, email, limit, purpose } = req.query;
       console.log(email);
       const query = {};
       if (email) {
@@ -97,6 +97,15 @@ async function run() {
           message: "data fetched successfully.",
           limitedResult,
         });
+      }
+
+      if (purpose === "managerOverview") {
+        const overviewRes = await clubsColl
+          .find(query)
+          .project({ _id: 1, clubName: 1 })
+          .toArray();
+
+        return res.send(overviewRes);
       }
       const result = await clubsColl.find(query).toArray();
       res.send(result);
@@ -147,10 +156,19 @@ async function run() {
     });
 
     app.get("/events", async (req, res) => {
-      const { email } = req.query;
+      const { email, purpose } = req.query;
       const query = {};
       if (email) {
         query.managerEmail = email;
+      }
+
+      if (purpose) {
+        const minimizedRes = await eventsColl
+          .find(query)
+          .project({ title: 1 })
+          .toArray();
+
+        return res.send(minimizedRes);
       }
       const result = await eventsColl.find(query).toArray();
       res.send(result);
@@ -214,7 +232,15 @@ async function run() {
       if (participantEmail) {
         query.participantEmail = participantEmail;
       }
-      const result = await clubMembersColl.findOne(query);
+      const result = await clubMembersColl.find(query).toArray();
+      res.send(result);
+    });
+
+    app.patch("/memberExpired/:memberId", async (req, res) => {
+      const { memberId } = req.params;
+      const update = req.body;
+      const query = { _id: new ObjectId(memberId) };
+      const result = await clubMembersColl.updateOne(query, { $set: update });
       res.send(result);
     });
 
@@ -256,6 +282,7 @@ async function run() {
     // payments related apis
     app.post("/create-checkout-session", async (req, res) => {
       const paymentInfo = req.body;
+      console.log(paymentInfo, "payment info from checkout session.");
       const cost = parseInt(paymentInfo.fee) * 100;
       const session = await stripe.checkout.sessions.create({
         line_items: [
@@ -279,6 +306,7 @@ async function run() {
           eventName: paymentInfo.eventName || null,
           participantEmail: paymentInfo.participantEmail,
           paymentType: paymentInfo.paymentType,
+          eventManager: paymentInfo.eventManager,
         },
         success_url: `${process.env.SITE_DOMAIN}/success-club-payment?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${process.env.SITE_DOMAIN}/canceled-club-payment?session_id={CHECKOUT_SESSION_ID}`,
@@ -328,6 +356,7 @@ async function run() {
             clubId: session.metadata.clubId,
             eventName: session.metadata.eventName,
             participantEmail: session.metadata.participantEmail,
+            eventManager: session.metadata.eventManager,
             status: "active",
             paymentId: session.payment_intent,
             joinedAt: new Date(),
@@ -385,7 +414,6 @@ async function run() {
         query.managerEmail = managerEmail;
       }
 
-      console.log(query);
       const managersClubsPromise = clubsColl.countDocuments(query);
       const managersEventsPromise = eventsColl.countDocuments(query);
 
