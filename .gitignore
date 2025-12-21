@@ -1,3 +1,4 @@
 node_modules
 .env
 .vercel
+buzzs-hub-firebase-adminsdk.json
