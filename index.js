@@ -128,15 +128,21 @@ async function run() {
     });
 
     app.get("/clubs", async (req, res) => {
-      const { status, email, limit, purpose } = req.query;
-      console.log(email);
+      const { status, email, limit, purpose, sort, search, category } =
+        req.query;
       const query = {};
-      if (email) {
-        query.managerEmail = email;
-      }
-      if (status) {
-        query.status = status;
-      }
+
+      if (email) query.managerEmail = email;
+      if (status) query.status = status;
+      if (search) query.clubName = { $regex: search, $options: "i" };
+      if (category) query.category = category;
+
+      let sortObj = {};
+      if (sort === "newest") sortObj = { createdAt: -1 };
+      if (sort === "oldest") sortObj = { createdAt: 1 };
+      if (sort === "highestFee") sortObj = { membershipFee: -1 };
+      if (sort === "lowestFee") sortObj = { membershipFee: 1 };
+
       if (limit) {
         const limitedResult = await clubsColl
           .find(query)
@@ -156,7 +162,7 @@ async function run() {
 
         return res.send(overviewRes);
       }
-      const result = await clubsColl.find(query).toArray();
+      const result = await clubsColl.find(query).sort(sortObj).toArray();
       res.send(result);
     });
 
