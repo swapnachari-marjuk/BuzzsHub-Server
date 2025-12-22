@@ -131,6 +131,7 @@ async function run() {
       const { status, email, limit, purpose, sort, search, category } =
         req.query;
       const query = {};
+      console.log(req.query);
 
       if (email) query.managerEmail = email;
       if (status) query.status = status;
@@ -144,9 +145,11 @@ async function run() {
       if (sort === "lowestFee") sortObj = { membershipFee: 1 };
 
       if (limit) {
+        const limitNum = parseInt(limit) || 5;
         const limitedResult = await clubsColl
           .find(query)
-          .sort({ createdAt: -1 })
+          .sort(sortObj || { createdAt: -1 })
+          .limit(limitNum)
           .toArray();
         return res.send({
           message: "data fetched successfully.",
@@ -311,6 +314,8 @@ async function run() {
       const { clubId, participantEmail, status, purpose } = req.query;
       const query = {};
 
+      console.log(req.query);
+
       if (clubId) {
         query.clubId = clubId;
       }
@@ -325,9 +330,10 @@ async function run() {
       if (purpose === "isExisting") {
         const result = await clubMembersColl.findOne(query);
         return res.send(result);
+      } else {
+        const result = await clubMembersColl.find(query).toArray();
+        res.send(result);
       }
-      const result = await clubMembersColl.find(query).toArray();
-      res.send(result);
     });
 
     app.patch("/memberExpired/:memberId", verifyFBToken, async (req, res) => {
@@ -413,10 +419,10 @@ async function run() {
       res.send({ url: session.url });
     });
 
-    app.post("/verify-payment-session", verifyFBToken, async (req, res) => {
+    app.post("/verify-payment-session", async (req, res) => {
       const { sessionId } = req.query;
       const session = await stripe.checkout.sessions.retrieve(sessionId);
-      console.log(session);
+      console.log("consoled session.", session);
       if (session.payment_status === "paid") {
         if (session.metadata.paymentType === "clubMembership") {
           const memberShipInfo = {
