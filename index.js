@@ -36,6 +36,7 @@ const verifyFBToken = async (req, res, next) => {
   try {
     const token = bearer.split(" ")[1];
     const decoded = await admin.auth().verifyIdToken(token);
+    req.decoded_email = decoded?.email;
     console.log(decoded);
   } catch (error) {
     console.log(error);
@@ -515,7 +516,7 @@ async function run() {
     app.get(
       "/managerOverview",
       verifyFBToken,
-      verifyManager,
+      // verifyManager,
       async (req, res) => {
         const { managerEmail, clubId } = req.query;
         const query = {};
