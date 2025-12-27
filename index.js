@@ -205,8 +205,10 @@ async function run() {
               $inc: { eventCount: 1 },
             }
           );
+          return res.send({ success: true, result, countIncRes });
         }
-        res.send({ success: true, result, countIncRes });
+
+        return res.send({success: false, message: "Something went wrong!"})
       }
     );
 
