@@ -208,7 +208,7 @@ async function run() {
           return res.send({ success: true, result, countIncRes });
         }
 
-        return res.send({success: false, message: "Something went wrong!"})
+        return res.send({ success: false, message: "Something went wrong!" });
       }
     );
 
@@ -563,6 +563,25 @@ async function run() {
         membersClub,
         membersEvents,
       };
+
+      res.send(result);
+    });
+
+    // homepage public overview.
+    app.get("/publicOverview", async (req, res) => {
+      const totalClubsPromise = clubsColl.countDocuments({
+        status: "approved",
+      });
+      const totalEventsPromise = eventsColl.countDocuments();
+      const totalUsersPromise = usersColl.countDocuments({ role: "user" });
+
+      const [totalClubs, totalEvents, totalUsers] = await Promise.all([
+        totalClubsPromise,
+        totalEventsPromise,
+        totalUsersPromise,
+      ]);
+
+      const result = { totalClubs, totalEvents, totalUsers };
 
       res.send(result);
     });
