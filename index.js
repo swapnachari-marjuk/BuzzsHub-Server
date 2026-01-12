@@ -129,10 +129,11 @@ async function run() {
     });
 
     app.get("/clubs", async (req, res) => {
-      const { status, email, limit, purpose, sort, search, category } =
+      const { status, email, limit, skip, purpose, sort, search, category } =
         req.query;
       const query = {};
-      console.log(req.query);
+      const limitNum = parseInt(limit) || (purpose === "publicShow" ? 9 : 5);
+      const skipNum = parseInt(skip);
 
       if (email) query.managerEmail = email;
       if (status) query.status = status;
@@ -145,19 +146,6 @@ async function run() {
       if (sort === "highestFee") sortObj = { membershipFee: -1 };
       if (sort === "lowestFee") sortObj = { membershipFee: 1 };
 
-      if (limit) {
-        const limitNum = parseInt(limit) || 5;
-        const limitedResult = await clubsColl
-          .find(query)
-          .sort(sortObj || { createdAt: -1 })
-          .limit(limitNum)
-          .toArray();
-        return res.send({
-          message: "data fetched successfully.",
-          limitedResult,
-        });
-      }
-
       if (purpose === "managerOverview") {
         const overviewRes = await clubsColl
           .find(query)
@@ -166,6 +154,33 @@ async function run() {
 
         return res.send(overviewRes);
       }
+
+      if (purpose === "publicShow") {
+        const publicRes = await clubsColl
+          .find(query)
+          .sort(sortObj)
+          .limit(limitNum)
+          .skip(skipNum)
+          .toArray();
+        const countData = await clubsColl.countDocuments({
+          status: "approved",
+        });
+
+        return res.send({ publicRes, countData });
+      }
+
+      if (purpose === "latest") {
+        const latestResult = await clubsColl
+          .find(query)
+          .sort({ createdAt: -1 })
+          .limit(limitNum)
+          .toArray();
+        return res.send({
+          message: "latest data fetched successfully.",
+          latestResult,
+        });
+      }
+
       const result = await clubsColl.find(query).sort(sortObj).toArray();
       res.send(result);
     });
