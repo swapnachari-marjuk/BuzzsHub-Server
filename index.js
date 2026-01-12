@@ -228,7 +228,9 @@ async function run() {
     );
 
     app.get("/events", async (req, res) => {
-      const { email, purpose } = req.query;
+      const { email, purpose, limit, skip } = req.query;
+      const limitNum = parseInt(limit);
+      const skipNum = parseInt(skip);
       const query = {};
       if (email) {
         query.managerEmail = email;
@@ -242,6 +244,17 @@ async function run() {
 
         return res.send(minimizedRes);
       }
+
+      if (purpose === "publicShow") {
+        const publicRes = await eventsColl
+          .find(query)
+          .limit(limitNum)
+          .skip(skipNum)
+          .toArray();
+        const totalEvents = await eventsColl.countDocuments();
+        return res.send({ publicRes, totalEvents });
+      }
+
       const result = await eventsColl.find(query).toArray();
       res.send(result);
     });
